@@ -1,10 +1,23 @@
 /* ============================================================
    AntawaTec — Landing interactivity
    - Animated Vanta Topology background on the hero (Antawa colors)
-   - Two simulated checkout flows: card (Hotmart) and bank transfer
+   - Card checkout (Hotmart) SIMULADO — el real es un webhook server-side.
+   - Bank transfer REAL: postea multipart a la edge function
+     `bank-transfer-intake` del backend (anónima; el admin valida después).
    Reimplemented from the design prototype's React components as
    dependency-free vanilla JS.
    ============================================================ */
+
+/* Endpoint del intake bancario. Global y con `var` a propósito: una página
+   puede definir window.ANTAWA_CONFIG = { intakeUrl: "…" } ANTES de cargar
+   landing.js para apuntar a otro entorno sin tocar este archivo. En local
+   (http.server + stack de Supabase) apunta solo al functions serve. */
+var INTAKE_URL =
+  (window.ANTAWA_CONFIG && window.ANTAWA_CONFIG.intakeUrl) ||
+  (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)
+    ? "http://127.0.0.1:54321/functions/v1/bank-transfer-intake"
+    : "https://qldeexeshdzrithjagqq.supabase.co/functions/v1/bank-transfer-intake");
+
 (function () {
   "use strict";
 
@@ -257,10 +270,15 @@
             <label>Sube el comprobante de transferencia</label>
             <label for="proof" class="upload-zone">
               <div class="upload-ic">↑</div>
-              <span class="upload-text">Click o arrastra una imagen / PDF aquí<br/><span style="font-size:12px;color:var(--ink-muted-48)">JPG, PNG o PDF · hasta 5 MB</span></span>
-              <input id="proof" type="file" accept="image/*,application/pdf" style="display:none" />
+              <span class="upload-text">Click o arrastra una imagen / PDF aquí<br/><span style="font-size:12px;color:var(--ink-muted-48)">JPG, PNG, WebP o PDF · hasta 5 MB</span></span>
+              <input id="proof" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" style="display:none" />
             </label>
           </div>
+
+          <input type="text" name="website" value="" autocomplete="off" tabindex="-1" aria-hidden="true"
+                 style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0" />
+
+          <p class="modal-error" role="alert" hidden></p>
 
           <button type="submit" class="modal-primary" disabled>Enviar comprobante</button>
           <button type="button" class="modal-secondary" data-back>← Volver</button>
@@ -277,20 +295,92 @@
     const zone = node.querySelector(".upload-zone");
     const fileInput = node.querySelector("#proof");
     const submitBtn = node.querySelector(".modal-primary");
+    const errorEl = node.querySelector(".modal-error");
+
+    // Espejo client-side de la validación del intake (el server manda igual).
+    const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    const MAX_BYTES = 5 * 1024 * 1024;
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.hidden = false;
+    }
+    function clearError() {
+      errorEl.textContent = "";
+      errorEl.hidden = true;
+    }
+
     fileInput.addEventListener("change", () => {
-      const name = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : "";
-      if (name) {
-        zone.classList.add("has-file");
-        zone.querySelector(".upload-ic").textContent = "✓";
-        zone.querySelector(".upload-text").innerHTML =
-          `<strong>${esc(name)}</strong><br/><span style="font-size:12px">Click para cambiar</span>`;
-        submitBtn.disabled = false;
+      clearError();
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      if (ALLOWED_TYPES.indexOf(file.type) === -1) {
+        showError("Formato no soportado: sube un JPG, PNG, WebP o PDF.");
+        fileInput.value = "";
+        submitBtn.disabled = true;
+        return;
       }
+      if (file.size > MAX_BYTES) {
+        showError("El archivo pesa más de 5 MB. Comprime la imagen o vuelve a exportar el PDF.");
+        fileInput.value = "";
+        submitBtn.disabled = true;
+        return;
+      }
+      zone.classList.add("has-file");
+      zone.querySelector(".upload-ic").textContent = "✓";
+      zone.querySelector(".upload-text").innerHTML =
+        `<strong>${esc(file.name)}</strong><br/><span style="font-size:12px">Click para cambiar</span>`;
+      submitBtn.disabled = false;
     });
 
     node.querySelector("form").addEventListener("submit", (e) => {
       e.preventDefault();
-      renderBankReview(state);
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      clearError();
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner"></span> Enviando…';
+
+      const fd = new FormData();
+      fd.set("businessName", state.shop);
+      fd.set("email", state.email);
+      fd.set("amount", "20");
+      // Honeypot: vacío para humanos; un bot que lo llenó se delata solo.
+      fd.set("website", node.querySelector('input[name="website"]').value);
+      fd.set("file", file);
+
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 30000);
+
+      fetch(INTAKE_URL, { method: "POST", body: fd, signal: ctl.signal })
+        .then((res) => {
+          if (res.status === 201) {
+            renderBankReview(state);
+            return;
+          }
+          // El intake responde {error} legible (400/429/500); si no, genérico.
+          return res.json().catch(() => null).then((body) => {
+            throw new Error(
+              (body && body.error) || "No pudimos recibir tu comprobante. Intenta de nuevo.",
+            );
+          });
+        })
+        .catch((err) => {
+          // El archivo elegido y el formulario quedan intactos: el reintento
+          // es volver a apretar el botón, sin re-elegir nada.
+          // TypeError = fetch no llegó al server (sin red / DNS / CORS): mensaje
+          // propio. Los {error} del intake ya vienen legibles y en español.
+          showError(
+            err && err.name === "AbortError"
+              ? "La conexión tardó demasiado. Revisa tu internet e intenta de nuevo."
+              : err instanceof TypeError
+                ? "Error de red. Revisa tu conexión e intenta de nuevo."
+                : (err && err.message) || "No pudimos recibir tu comprobante. Intenta de nuevo.",
+          );
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Enviar comprobante";
+        })
+        .finally(() => clearTimeout(timer));
     });
     node.querySelector("[data-back]").addEventListener("click", () => renderBankForm(state));
 
