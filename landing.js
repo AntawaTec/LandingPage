@@ -252,17 +252,19 @@ var INTAKE_URL =
 
         <div class="bank-details">
           <div class="label">Banco</div>
-          <div class="val">Banco Pichincha</div>
+          <div class="val">Produbanco</div>
           <div class="label">Tipo de cuenta</div>
-          <div class="val">Corriente</div>
+          <div class="val">Cuenta Pro Pyme</div>
           <div class="label">Número de cuenta</div>
-          <div class="val">2100 4488 71 <span class="copy-btn" data-copy="2100448871">Copiar</span></div>
+          <div class="val">2705 9080 294 <span class="copy-btn" data-copy="27059080294">Copiar</span></div>
           <div class="label">Beneficiario</div>
-          <div class="val">Antawa S.A.S.</div>
+          <div class="val">ANTAWATEC S.A.S.</div>
           <div class="label">RUC</div>
-          <div class="val">1793215467001</div>
+          <div class="val">1793218430001</div>
           <div class="label">Email para comprobantes</div>
-          <div class="val">pagos@antawa.tech</div>
+          <div class="val">mshpapp@antwt.com</div>
+          <div class="label">Teléfono</div>
+          <div class="val">0983924303</div>
         </div>
 
         <form novalidate>
