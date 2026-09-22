@@ -27,15 +27,51 @@ supabase functions serve --env-file supabase/functions/.env   # dejar corriendo
 Luego: modal "Pagar con transferencia" → datos + archivo → "Recibimos tu
 comprobante", y la fila queda `pending` en `bank_transfer_proofs` (Studio en
 `:54323`). En cualquier otro host apunta al proyecto hosted; se puede overridear
-sin tocar código definiendo `window.ANTAWA_CONFIG = { intakeUrl: "…" }` antes de
+sin tocar código definiendo `window.ANTAWA_CONFIG = { intakeUrl: "…" }` (o
+`{ functionsBase: "…" }` para mover los tres endpoints a la vez) antes de
 cargar `landing.js`.
+
+## Probar el pago con tarjeta en local
+
+El modal de tarjeta postea de verdad contra `payphone-prepare` y redirige al
+checkout hosteado de Payphone; al volver, `payphone-confirm` confirma el cobro
+server-side. Para probarlo en local necesitas una app de **pruebas**: en
+https://appdeveloper.payphonetodoesposible.com crea una aplicación tipo
+**WEB**, con "Dominio web" `www.antwt.com` y "URL de respuesta"
+`https://www.antwt.com/`; el Token y el StoreID están en la pestaña
+**Credenciales**, y el teléfono de quien pruebe se registra en
+**Probadores → Clientes**. Con esas credenciales en
+`../AntawaTec-BE/supabase/functions/.env`:
+
+```
+PAYPHONE_TOKEN=…
+PAYPHONE_STORE_ID=…
+PAYPHONE_RESPONSE_URL=http://localhost:8080/
+PAYPHONE_CANCELLATION_URL=http://localhost:8080/?pago=cancelado
+```
+
+Con esas variables cargadas:
+
+```bash
+cd ../AntawaTec-BE && supabase functions serve --env-file supabase/functions/.env
+```
+
+Flujo: modal "Pagar con tarjeta" → taller + email → `payphone-prepare` →
+redirige al sandbox de Payphone (con la app de pruebas, aprueba cualquier
+tarjeta) → vuelve a `http://localhost:8080/?id=…&clientTransactionId=…` →
+`payphone-confirm` → "¡Bienvenido a AntawaTec!". En Studio (`:54323`) revisa
+`card_payment_intents` (debe quedar `approved`), `shops` (taller nuevo) y
+`subscriptions` (`provider = 'payphone'`). Cancelar desde el checkout de
+Payphone lleva a `?pago=cancelado` y muestra el modal de pago cancelado. Se
+puede apuntar a otro entorno sin tocar código con
+`window.ANTAWA_CONFIG = { functionsBase: "…" }` antes de cargar `landing.js`.
 
 ## Estructura
 
 - `index.html` — markup + sistema de diseño (tokens, tipografía, tiles, componentes).
 - `landing.js` — interactividad sin dependencias: fondo animado del hero (Vanta
-  Topology), checkout de tarjeta (Hotmart, simulado — el real es un webhook
-  server-side) y flujo de transferencia bancaria REAL (multipart al intake).
+  Topology), checkout de tarjeta REAL vía Payphone (botón de pago por
+  redirección) y flujo de transferencia bancaria REAL (multipart al intake).
 - `assets/` — logos de Antawa Technologies (blanco para la nav, navy para el footer).
 
 ## Diseño
