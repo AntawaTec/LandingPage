@@ -120,7 +120,8 @@ var PAYPHONE_CONFIRM_URL = FUNCTIONS_BASE + "/payphone-confirm";
   function openModal(flow) {
     activeFlow = flow;
     container.innerHTML = "";
-    if (flow === "card") renderCard();
+    if (flow === "choose") renderChoose();
+    else if (flow === "card") renderCard();
     else if (flow === "bank") renderBank();
     else if (typeof flow === "function") flow();
     root.classList.add("open");
@@ -197,6 +198,35 @@ var PAYPHONE_CONFIRM_URL = FUNCTIONS_BASE + "/payphone-confirm";
   }
 
   /* ----------------------------------------------------------
+     Elegir cómo pagar — primer paso de "Empezar". Dos opciones grandes;
+     cada una es un [data-checkout-trigger], así que el listener global
+     abre el flujo que corresponda (card → Payphone, bank → transferencia).
+     ---------------------------------------------------------- */
+  function renderChoose() {
+    mount(el(`
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ch-title">
+        ${closeButton()}
+        <h3 id="ch-title">¿Cómo quieres pagar?</h3>
+        <p class="modal-sub">$25 al mes · Cancelas cuando quieras · Sin contratos</p>
+        <div class="choice-grid">
+          <button type="button" class="choice-card" data-checkout-trigger="card">
+            <span class="choice-icon">💳</span>
+            <span class="choice-title">Tarjeta de crédito o débito</span>
+            <span class="choice-desc">Pago seguro con Payphone. Tu taller queda activo al instante.</span>
+            <span class="choice-cta">Pagar con tarjeta →</span>
+          </button>
+          <button type="button" class="choice-card" data-checkout-trigger="bank">
+            <span class="choice-icon">🏦</span>
+            <span class="choice-title">Transferencia bancaria</span>
+            <span class="choice-desc">Transfieres, subes el comprobante y activamos tu taller en menos de 2 horas hábiles.</span>
+            <span class="choice-cta">Pagar con transferencia →</span>
+          </button>
+        </div>
+      </div>
+    `));
+  }
+
+  /* ----------------------------------------------------------
      Confirmation view (shared by the card flow)
      ---------------------------------------------------------- */
   function renderConfirmation(email, via) {
@@ -208,7 +238,7 @@ var PAYPHONE_CONFIRM_URL = FUNCTIONS_BASE + "/payphone-confirm";
           <h3>¡Bienvenido a AntawaTec!</h3>
           <p>Tu pago con ${esc(via)} fue aprobado. Te enviamos a <strong>${esc(email)}</strong> el enlace para entrar a tu taller. Revisa también spam.</p>
           <div class="magic-card">
-            <div class="from">De: hola@antawa.tech</div>
+            <div class="from">De: no-reply@mail.antwt.com</div>
             <div class="subj">Tu taller en AntawaTec está listo</div>
             <div>Un solo click. Sin contraseñas. Tu cuenta vacía, lista para tu primer cliente.</div>
             <span class="link">Entrar a mi taller →</span>
@@ -598,7 +628,7 @@ var PAYPHONE_CONFIRM_URL = FUNCTIONS_BASE + "/payphone-confirm";
             entre <strong>10 minutos y 2 horas</strong> en horario laboral.
           </p>
           <div class="magic-card">
-            <div class="from">De: hola@antawa.tech</div>
+            <div class="from">De: no-reply@mail.antwt.com</div>
             <div class="subj">Cuando aprobemos, te enviaremos a ${esc(state.email || "tu@email.com")}:</div>
             <div>“Tu taller en AntawaTec está listo. Entra con un click.”</div>
             <span class="link">Entrar a ${esc(state.shop || "mi taller")} →</span>

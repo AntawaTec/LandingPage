@@ -1372,6 +1372,41 @@
   .modal-primary:active { transform: scale(0.97); }
   .modal-primary:disabled { opacity: 0.6; cursor: wait; }
 
+  /* Elegir método de pago (primer paso de "Empezar") */
+  .choice-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--s-md);
+  }
+  .choice-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    text-align: left;
+    padding: 22px 20px;
+    border: 1.5px solid var(--hairline);
+    border-radius: var(--r-md, 12px);
+    background: #fff;
+    color: var(--ink);
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+  }
+  .choice-card:hover, .choice-card:focus-visible {
+    border-color: var(--primary);
+    box-shadow: 0 8px 24px rgba(32, 48, 80, 0.12);
+    outline: none;
+  }
+  .choice-card:active { transform: scale(0.98); }
+  .choice-icon { font-size: 28px; line-height: 1; }
+  .choice-title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+  .choice-desc { font-size: 14px; line-height: 1.45; color: var(--ink-muted-70); }
+  .choice-cta { margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--primary); }
+  @media (max-width: 560px) {
+    .choice-grid { grid-template-columns: 1fr; }
+  }
+
   .modal-secondary {
     width: 100%;
     background: transparent;
@@ -1580,7 +1615,7 @@
             — diseñada junto a mecánicos del Ecuador, no desde una oficina.
           </p>
           <div class="hero-ctas rise rise-4">
-            <button class="btn-primary" data-checkout-trigger="bank">Empezar — $25/mes</button>
+            <button class="btn-primary" data-checkout-trigger="choose">Empezar — $25/mes</button>
             <a class="btn-ghost-pill" href="#producto">Ver demo</a>
           </div>
         </div>
@@ -2032,7 +2067,7 @@
           Empieza ahora y crea tu primera cita en menos de dos minutos.
         </p>
         <div class="final-cta-ctas">
-          <button class="btn-primary" data-checkout-trigger="card">Empezar — $25/mes</button>
+          <button class="btn-primary" data-checkout-trigger="choose">Empezar — $25/mes</button>
           <a href="#contacto" class="btn-ghost-pill">Hablar con alguien</a>
         </div>
       </div>
