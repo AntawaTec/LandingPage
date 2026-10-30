@@ -7,6 +7,10 @@
      al volver, `payphone-confirm` confirma el cobro server-side.
    - Bank transfer REAL: postea multipart a la edge function
      `bank-transfer-intake` del backend (anónima; el admin valida después).
+   - Prueba gratis por código promocional: solo por link de campaña
+     (`/prueba` o `?codigo=`), sin CTA en la página. El modal pide taller,
+     email, celular y código, y postea a `promo-intake`, que crea el taller
+     con 30 días de prueba y le manda el acceso por correo.
    Reimplemented from the design prototype's React components as
    dependency-free vanilla JS.
    ============================================================ */
@@ -28,6 +32,7 @@ var INTAKE_URL =
 
 var PAYPHONE_PREPARE_URL = FUNCTIONS_BASE + "/payphone-prepare";
 var PAYPHONE_CONFIRM_URL = FUNCTIONS_BASE + "/payphone-confirm";
+var PROMO_INTAKE_URL = FUNCTIONS_BASE + "/promo-intake";
 
 (function () {
   "use strict";
@@ -186,6 +191,16 @@ var PAYPHONE_CONFIRM_URL = FUNCTIONS_BASE + "/payphone-confirm";
   } else if (returnParams.get("pago") === "cancelado") {
     history.replaceState(null, "", location.pathname + location.hash);
     openModal(() => renderCardCancelled());
+  } else if (
+    location.pathname.replace(/\/+$/, "") === "/prueba" ||
+    returnParams.has("codigo")
+  ) {
+    /* Link de campaña de la prueba gratis: `/prueba` (rewrite de Vercel a
+       index.html) o `?codigo=XXXX`. No hay CTA en la página a propósito: el
+       flujo existe solo para quien recibió el link. El código de la URL
+       viene prellenado en mayúsculas, pero el campo sigue editable. */
+    const trialCode = (returnParams.get("codigo") || "").trim().toUpperCase();
+    openModal(() => renderTrialForm({ code: trialCode }));
   }
 
   function mount(node) {
@@ -632,6 +647,127 @@ var PAYPHONE_CONFIRM_URL = FUNCTIONS_BASE + "/payphone-confirm";
             <div class="subj">Cuando aprobemos, te enviaremos a ${esc(state.email || "tu@email.com")}:</div>
             <div>“Tu taller en AntawaTec está listo. Entra con un click.”</div>
             <span class="link">Entrar a ${esc(state.shop || "mi taller")} →</span>
+          </div>
+          <button class="modal-primary" data-close-modal>Entendido</button>
+        </div>
+      </div>
+    `));
+  }
+
+  /* ----------------------------------------------------------
+     Prueba gratis por código promocional: form → promo-intake → éxito.
+     El backend valida el código (activo, vigente, con cupo) y que el email
+     no tenga ya un taller; sus {error} vienen en español listos para
+     mostrar (incluido el 409, que ya dice que ingrese en app.antwt.com).
+     ---------------------------------------------------------- */
+  function renderTrialForm(state) {
+    const node = el(`
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tr-title">
+        ${closeButton()}
+        <h3 id="tr-title">Activa tu prueba gratis de 30 días</h3>
+        <p class="modal-sub">Sin tarjeta. Te enviamos el acceso a tu correo en minutos.</p>
+
+        <form novalidate>
+          <div class="form-field">
+            <label for="tr-shop">Nombre del taller</label>
+            <input id="tr-shop" type="text" required placeholder="Mecánica Don Andrés" />
+          </div>
+          <div class="form-field">
+            <label for="tr-email">Email del taller</label>
+            <input id="tr-email" type="email" required placeholder="tu@taller.com" autocomplete="email" />
+          </div>
+          <div class="form-field">
+            <label for="tr-phone">Celular / WhatsApp</label>
+            <input id="tr-phone" type="tel" required placeholder="0991234567" autocomplete="tel" />
+          </div>
+          <div class="form-field">
+            <label for="tr-code">Código de promoción</label>
+            <input id="tr-code" type="text" required autocomplete="off" style="text-transform:uppercase" />
+          </div>
+
+          <input type="text" name="website" value="" autocomplete="off" tabindex="-1" aria-hidden="true"
+                 style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0" />
+
+          <p class="modal-error" role="alert" hidden></p>
+
+          <button type="submit" class="modal-primary">Activar mi prueba →</button>
+          <p class="modal-fine">
+            Al terminar los 30 días puedes seguir por $25/mes.
+            Sin contratos, cancelas cuando quieras.
+          </p>
+        </form>
+      </div>
+    `);
+
+    const form = node.querySelector("form");
+    const shopInput = node.querySelector("#tr-shop");
+    const emailInput = node.querySelector("#tr-email");
+    const phoneInput = node.querySelector("#tr-phone");
+    const codeInput = node.querySelector("#tr-code");
+    const submitBtn = node.querySelector(".modal-primary");
+    const errorEl = node.querySelector(".modal-error");
+    // Asignado por .value (no interpolado en el template): el código viene
+    // de la URL y no debe poder inyectar HTML.
+    codeInput.value = state.code || "";
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.hidden = false;
+    }
+    function clearError() {
+      errorEl.textContent = "";
+      errorEl.hidden = true;
+    }
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (!form.reportValidity()) return;
+      clearError();
+
+      const businessName = shopInput.value;
+      const email = emailInput.value;
+      const phone = phoneInput.value;
+      // El text-transform de CSS es solo visual: el valor real puede venir
+      // en minúsculas, así que lo normalizamos antes de mandarlo.
+      const code = codeInput.value.trim().toUpperCase();
+      const website = node.querySelector('input[name="website"]').value;
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner"></span> Activando…';
+
+      postJson(PROMO_INTAKE_URL, { code, businessName, email, phone, website }, 201)
+        .then(() => {
+          renderTrialSuccess(email);
+        })
+        .catch((err) => {
+          // El formulario queda intacto: el reintento es volver a apretar el
+          // botón. Los {error} del backend (código inválido/agotado, 409 de
+          // email con taller) se muestran tal cual.
+          showError(friendlyMessage(err, "No pudimos activar tu prueba. Intenta de nuevo."));
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Activar mi prueba →";
+        });
+    });
+
+    mount(node);
+  }
+
+  function renderTrialSuccess(email) {
+    // Limpiamos `/prueba` o `?codigo=` de la URL: si recarga, no se le
+    // reabre el formulario de una prueba que ya activó.
+    history.replaceState(null, "", "/");
+    mount(el(`
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tr-title">
+        ${closeButton()}
+        <div class="modal-confirm">
+          <div class="check">✓</div>
+          <h3 id="tr-title">¡Tu prueba está activa!</h3>
+          <p>Te enviamos a <strong>${esc(email)}</strong> el enlace para entrar a tu taller. Revisa también spam.</p>
+          <div class="magic-card">
+            <div class="from">De: no-reply@mail.antwt.com</div>
+            <div class="subj">Tu taller en AntawaTec está listo</div>
+            <div>Un solo click. Sin contraseñas. Tu cuenta vacía, lista para tu primer cliente.</div>
+            <span class="link">Entrar a mi taller →</span>
           </div>
           <button class="modal-primary" data-close-modal>Entendido</button>
         </div>
