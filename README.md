@@ -66,12 +66,30 @@ Payphone lleva a `?pago=cancelado` y muestra el modal de pago cancelado. Se
 puede apuntar a otro entorno sin tocar código con
 `window.ANTAWA_CONFIG = { functionsBase: "…" }` antes de cargar `landing.js`.
 
+## Probar la prueba por código
+
+El flujo de "30 días gratis" no tiene CTA en la página: se abre solo desde el
+link de campaña. `landing.js` abre el modal si la ruta es `/prueba` o si hay
+`?codigo=` en la URL, y postea a la edge function `promo-intake`. En local
+`/prueba` da 404 (el rewrite vive en `vercel.json` y solo lo aplica Vercel),
+así que usa el query param:
+
+```
+http://localhost:8080/?codigo=PRUEBA30
+```
+
+Con el stack local del backend levantado (ver arriba), el código tiene que
+existir y estar activo en `promo_codes`. Al activar, `promo-intake` crea el
+taller con `subscriptions.provider = 'trial'` y la URL vuelve a `/` para que un
+reload no reabra el formulario.
+
 ## Estructura
 
 - `index.html` — markup + sistema de diseño (tokens, tipografía, tiles, componentes).
 - `landing.js` — interactividad sin dependencias: fondo animado del hero (Vanta
   Topology), checkout de tarjeta REAL vía Payphone (botón de pago por
-  redirección) y flujo de transferencia bancaria REAL (multipart al intake).
+  redirección), flujo de transferencia bancaria REAL (multipart al intake) y
+  prueba gratis por código (`promo-intake`).
 - `assets/` — logos de Antawa Technologies (blanco para la nav, navy para el footer).
 
 ## Diseño
