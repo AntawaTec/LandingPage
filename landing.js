@@ -79,6 +79,26 @@ var PROMO_INTAKE_URL = FUNCTIONS_BASE + "/promo-intake";
      (mismo contrato que el intake bancario, pero en JSON en vez de
      multipart).
      ---------------------------------------------------------- */
+  /* Meta Pixel: `fbq` lo define index.html. Con bloqueador de anuncios no
+     existe, y la medición nunca debe romper el flujo del prospecto. */
+  function track(event, params) {
+    try {
+      if (typeof window.fbq === "function") window.fbq("track", event, params);
+    } catch (_) { /* sin píxel */ }
+  }
+
+  /* Id del lead de Kommo que trae el link del bot de WhatsApp (`?lid=`).
+     index.html lo guarda en sessionStorage al cargar; la URL es el respaldo.
+     Solo dígitos: cualquier otra cosa no se manda. */
+  function campaignLeadId() {
+    let lid = "";
+    try {
+      lid = sessionStorage.getItem("antawa_lid") || "";
+    } catch (_) { /* storage bloqueado */ }
+    if (!lid) lid = new URLSearchParams(location.search).get("lid") || "";
+    return /^\d{1,15}$/.test(lid) ? lid : null;
+  }
+
   function postJson(url, body, okStatus) {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 30000);
@@ -661,6 +681,7 @@ var PROMO_INTAKE_URL = FUNCTIONS_BASE + "/promo-intake";
      mostrar (incluido el 409, que ya dice que ingrese en app.antwt.com).
      ---------------------------------------------------------- */
   function renderTrialForm(state) {
+    track("ViewContent", { content_name: "prueba_30_dias" });
     const node = el(`
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tr-title">
         ${closeButton()}
@@ -735,8 +756,10 @@ var PROMO_INTAKE_URL = FUNCTIONS_BASE + "/promo-intake";
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<span class="spinner"></span> Activando…';
 
-      postJson(PROMO_INTAKE_URL, { code, businessName, email, phone, website }, 201)
+      const lid = campaignLeadId();
+      postJson(PROMO_INTAKE_URL, { code, businessName, email, phone, website, lid }, 201)
         .then(() => {
+          track("StartTrial", { value: 25, currency: "USD", predicted_ltv: 25 });
           renderTrialSuccess(email);
         })
         .catch((err) => {
